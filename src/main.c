@@ -19,6 +19,9 @@
 #include <pulse/error.h>
 #include <stdio.h>
 
+#include <curses.h>
+
+
 #define RATE 44100
 
 #define DIT 1
@@ -238,61 +241,18 @@ int set_data( int *data, int n, const char c )
 	}
 }
 
-int main(int argc, char *argv[])
+size_t synth(
+		int tone, float dit_length, float dah_length, float gap_length, float char_space_length, float word_space_length,
+		int *data, char *buf, int max_samples
+		)
 {
-	int res;
-	int error;
-
-	srand( get_current_time_ms() );
-
-	static const pa_sample_spec ss = {
-		.format = PA_SAMPLE_S16LE,
-		.rate = RATE,
-		.channels = 1
-	};
-
-	pa_simple *pa_handle;
-	pa_handle = pa_simple_new(NULL, "alexplayer", PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error);
-	if( pa_handle == NULL ) {
-		fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
-		assert( 0 );
-	}
-
-	int max_seconds = 10;
-	size_t max_samples = RATE * max_seconds;
-	size_t buf_size = max_samples * 2;
-
-	float dit_length = 0.1;
-	float dah_length = 0.3;
-	float gap_length = 0.1;
-	float char_space_length = 0.3;
-	float word_space_length = 0.5;
-
-	char_space_length -= gap_length;
-	word_space_length -= gap_length;
-	assert( dit_length > 0.0 );
-	assert( dah_length > dit_length );
-	assert( gap_length > 0.0 );
-	assert( char_space_length > gap_length );
-	assert( word_space_length > char_space_length );
-
-	float tone = 500;
 	float angular_frequency = tone * 2.0 * M_PI;
-
-	//int num_bits = 3;
-	//int encoding = 0b101010;
 
 	int mute = 1;
 	float next_at = 0.0;
 	int data_i = 0;
-	int data[1024];
-	res = set_data( data, 1024, 'b' );
-	assert( res > 0 );
 
-	char *buf = malloc( buf_size );
-	int buf_len = 0;
-	int done = 0;
-	for( int i = 0; i < max_samples && !done; i++ ) {
+	for( int i = 0; i < max_samples; i++ ) {
 		float t = ((float)i) / RATE;
 		float x = sin( t * angular_frequency );
 		int16_t xx = x * 32500;
@@ -322,16 +282,13 @@ int main(int argc, char *argv[])
 						next_at = t + word_space_length;
 						break;
 					case 0:
-						done = 1;
-						buf_len = i*2;
-						break;
+						return i*2;
 					default:
+						printf("got %d\n", data_i );
+						printf("got %d\n", data[data_i] );
 						assert(0);
 				}
 				data_i++;
-			}
-			if( done ) {
-				break;
 			}
 		}
 
@@ -341,16 +298,126 @@ int main(int argc, char *argv[])
 			*p = xx;
 		}
 	}
+	return -1;
+}
 
-	res = pa_simple_write( pa_handle, buf, buf_len, &error );
-	assert( res == 0 );
+void screen_printf(const char *fmt, ...) {
+	char s[1024];
+	va_list args;
+	va_start(args, fmt);
+	vsprintf(s, fmt, args);
+	va_end(args);
 
-	res = pa_simple_drain( pa_handle, &error );
-	assert( res == 0 );
+	clear();
+	mvaddstr(0, 0, s);
+	refresh();
+}
 
-	//if( res < 0 ) {
-	//	LOG_ERROR("res=d err=d pa_simple_write failed", res, error);
-	//}
+char get_random( int num ) {
+	int n = random() % num;
+	if( n < 27 ) {
+		return 'a' + n;
+	}
+	n -= 27;
+	return '0' + n;
+}
 
+int main(int argc, char *argv[])
+{
+	if( argc != 2 ) {
+		fprintf(stderr, "usage: %s <num chars>\n", argv[0]);
+		return 1;
+	}
+
+	int num_chars = atoi(argv[1]);
+
+	initscr();
+	timeout(-1);
+
+    refresh();
+
+	int res;
+	int error;
+
+	srand( get_current_time_ms() );
+
+	static const pa_sample_spec ss = {
+		.format = PA_SAMPLE_S16LE,
+		.rate = RATE,
+		.channels = 1
+	};
+
+	pa_simple *pa_handle;
+	pa_handle = pa_simple_new(NULL, "alexplayer", PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error);
+	if( pa_handle == NULL ) {
+		fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
+		assert( 0 );
+	}
+
+	int max_seconds = 10;
+	size_t max_samples = RATE * max_seconds;
+	size_t buf_size = max_samples * 2;
+
+	float dit_length = 0.06;
+	float dah_length = dit_length * 3;
+	float gap_length = dit_length;
+	float char_space_length = dit_length * 3;
+	float word_space_length = dit_length * 7;
+
+	char_space_length -= gap_length;
+	word_space_length -= gap_length;
+	assert( dit_length > 0.0 );
+	assert( dah_length > dit_length );
+	assert( gap_length > 0.0 );
+	assert( char_space_length > gap_length );
+	assert( word_space_length > char_space_length );
+
+	float tone = 500;
+
+	while(1) {
+		char randomletter = get_random(num_chars);
+
+		screen_printf("listen...");
+
+		int data[1024];
+		res = set_data( data, 1024, randomletter );
+		assert( res > 0 );
+		data[res] = 0;
+
+		char *buf = malloc( buf_size );
+
+		size_t buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples );
+		assert( buf_len > 0 );
+
+		res = pa_simple_write( pa_handle, buf, buf_len, &error );
+		assert( res == 0 );
+
+		res = pa_simple_drain( pa_handle, &error );
+		assert( res == 0 );
+
+
+		screen_printf("what was that?");
+		int guess = getch();
+
+		if( guess == randomletter ) {
+			screen_printf("correct!");
+			sleep(2);
+			continue;
+		}
+		screen_printf("wrong! %c", randomletter);
+		sleep(2);
+
+		for(int i = 0; i < 3; i++ ) {
+			res = pa_simple_write( pa_handle, buf, buf_len, &error );
+			assert( res == 0 );
+
+			res = pa_simple_drain( pa_handle, &error );
+			assert( res == 0 );
+
+			sleep(1);
+		}
+
+	}
+	endwin();
 	return 0;
 }
