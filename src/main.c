@@ -6,198 +6,351 @@
 
 #include <dirent.h>
 
-
-#include "httpget.h"
-#include "player.h"
-#include "albums.h"
-#include "playlist_manager.h"
-#include "playlist.h"
-#include "string_utils.h"
-#include "log.h"
-#include "errors.h"
-#include "my_data.h"
-#include "web.h"
-#include "streams.h"
+#include "sds.h"
 #include "timing.h"
-
-#ifdef USE_RASP_PI
-#include "raspbpi.h"
-#endif
+#include "math.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
 
-#include "id3.h"
+#include <pulse/simple.h>
+#include <pulse/error.h>
+#include <stdio.h>
 
-struct httpdata hd;
+#define RATE 44100
 
-void ignore_singal_init() {
-	// Ignore these signals
-	signal(SIGPIPE, SIG_IGN);
-}
+#define DIT 1
+#define DAH 2
+#define CHAR_SPACE 4
+#define WORD_SPACE 5
 
-
-PlaylistItem* get_random_track(PlaylistItem *p) {
-	int num_tracks = 0;
-	for( PlaylistItem *q = p; q != NULL; q = q->next ) {
-		num_tracks++;
+int set_data( int *data, int n, const char c )
+{
+	switch( c ) {
+		case 'a':
+			data[0] = DIT;
+			data[1] = DAH;
+			return 2;
+		case 'b':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DIT;
+			return 4;
+		case 'c':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DAH;
+			data[3] = DIT;
+			return 4;
+		case 'd':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DIT;
+			return 3;
+		case 'e':
+			data[0] = DIT;
+			return 1;
+		case 'f':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DAH;
+			data[3] = DIT;
+			return 4;
+		case 'g':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DIT;
+			return 3;
+		case 'h':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DIT;
+			return 4;
+		case 'i':
+			data[0] = DIT;
+			data[1] = DIT;
+			return 2;
+		case 'j':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DAH;
+			return 4;
+		case 'k':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DAH;
+			return 3;
+		case 'l':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DIT;
+			data[3] = DIT;
+			return 4;
+		case 'm':
+			data[0] = DAH;
+			data[1] = DAH;
+			return 2;
+		case 'n':
+			data[0] = DAH;
+			data[1] = DIT;
+			return 2;
+		case 'o':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DAH;
+			return 3;
+		case 'p':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DIT;
+			return 4;
+		case 'q':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DIT;
+			data[3] = DAH;
+			return 4;
+		case 'r':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DIT;
+			return 3;
+		case 's':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			return 3;
+		case 't':
+			data[0] = DAH;
+			return 1;
+		case 'u':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DAH;
+			return 3;
+		case 'v':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DAH;
+			return 4;
+		case 'w':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DAH;
+			return 3;
+		case 'x':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DAH;
+			return 4;
+		case 'y':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DAH;
+			data[3] = DAH;
+			return 4;
+		case 'z':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DIT;
+			data[3] = DIT;
+			return 4;
+		case '1':
+			data[0] = DIT;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DAH;
+			data[4] = DAH;
+			return 5;
+		case '2':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DAH;
+			data[3] = DAH;
+			data[4] = DAH;
+			return 5;
+		case '3':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DAH;
+			data[4] = DAH;
+			return 5;
+		case '4':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DIT;
+			data[4] = DAH;
+			return 5;
+		case '5':
+			data[0] = DIT;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DIT;
+			data[4] = DIT;
+			return 5;
+		case '6':
+			data[0] = DAH;
+			data[1] = DIT;
+			data[2] = DIT;
+			data[3] = DIT;
+			data[4] = DIT;
+			return 5;
+		case '7':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DIT;
+			data[3] = DIT;
+			data[4] = DIT;
+			return 5;
+		case '8':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DIT;
+			data[4] = DIT;
+			return 5;
+		case '9':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DAH;
+			data[4] = DIT;
+			return 5;
+		case '0':
+			data[0] = DAH;
+			data[1] = DAH;
+			data[2] = DAH;
+			data[3] = DAH;
+			data[4] = DAH;
+			return 5;
+		default:
+			return -1;
 	}
-	if( num_tracks == 0 ) {
-		return NULL;
-	}
-	int r = rand() % num_tracks;
-	for( ; r > 0; r-- ) {
-		p = p->next;
-	}
-	return p;
 }
 
 int main(int argc, char *argv[])
 {
-	char* log_level = (char*) sdsnew(getenv("LOG_LEVEL"));
-	str_to_upper( log_level );
-	set_log_level_string( log_level ? log_level : "INFO" );
-
-	bool auto_play = false;
-	char* auto_start = (char*) sdsnew(getenv("MUSIC_AUTO_PLAY"));
-	if( strcmp(auto_start, "1") == 0 ) {
-		auto_play = true;
-	}
-
-	ignore_singal_init();
+	int res;
+	int error;
 
 	srand( get_current_time_ms() );
 
-	int res;
-	Player player;
-	ID3Cache *cache;
-
-	if( argc != 5 ) {
-		printf("%s <albums path> <streams path> <playlist path> <id3 cache path>\n", argv[0]);
-		return 1;
-	}
-	char *music_path = argv[1];
-	char *streams_path = argv[2];
-	char *playlist_path = argv[3];
-	char *id3_cache_path = argv[4];
-
-	trim_suffix(music_path, "/");
-
-	init_player( &player, music_path );
-
-#ifdef USE_RASP_PI
-	if( init_rasp_pi( &player ) ) {
-		return 1;
-	}
-#endif
-
-
-	res = id3_cache_new( &cache, id3_cache_path, player.mh );
-	if( res ) {
-		LOG_ERROR("failed to load cache");
-		return 1;
-	}
-
-	StreamList stream_list;
-	stream_list.p = NULL;
-	res = parse_streams( streams_path, &stream_list );
-	if( res ) {
-		LOG_CRITICAL("failed to load streams");
-		return 1;
-	}
-
-	AlbumList album_list;
-	res = album_list_init( &album_list, cache, music_path );
-	if( res ) {
-		LOG_CRITICAL("err=d failed to init album list", res);
-		return 1;
-	}
-	res = album_list_load( &album_list );
-	if( res ) {
-		LOG_CRITICAL("err=d failed to load albums", res);
-		return 1;
-	}
-
-	res = id3_cache_save( cache );
-	if( res ) {
-		LOG_ERROR("err=d path=s failed to save id3 cache", res, cache->path);
-	}
-	
-	LOG_DEBUG("calling manager init");
-	PlaylistManager playlist_manager;
-	playlist_manager_init( &playlist_manager, playlist_path, &album_list );
-	player.playlist_manager = &playlist_manager;
-
-	LOG_DEBUG("calling load");
-	res = playlist_manager_load( &playlist_manager );
-	if( res ) {
-		LOG_WARN("failed to load playlist");
-	}
-	LOG_DEBUG("load done");
-
-	Playlist *default_playlist;
-	res = playlist_manager_get_playlist( &playlist_manager, "default", &default_playlist );
-	if( res == 0 ) {
-		PlaylistItem *p = get_random_track( default_playlist->root );
-		if( p ) {
-			player_change_track( &player, p, TRACK_CHANGE_IMMEDIATE );
-			if( auto_play ) {
-				player_set_playing( &player, true );
-			}
-		}
-	} else {
-		res = playlist_manager_new_playlist( &playlist_manager, "default", &default_playlist );
-		if( res != 0 ) {
-			LOG_CRITICAL("failed to create default playlist");
-			return 1;
-		}
-	}
-
-	LOG_DEBUG("p=p starting", default_playlist);
-
-	res = start_player( &player );
-	if( res ) {
-		LOG_CRITICAL("failed to start player");
-		return 1;
-	}
-
-	MyData my_data = {
-		&player,
-		&album_list,
-		&playlist_manager,
-		&stream_list
+	static const pa_sample_spec ss = {
+		.format = PA_SAMPLE_S16LE,
+		.rate = RATE,
+		.channels = 1
 	};
 
-	WebHandlerData web_handler_data;
-
-	res = init_http_server_data( &web_handler_data, &my_data );
-	if( res ) {
-		LOG_ERROR("failed to init http server");
-		return 2;
+	pa_simple *pa_handle;
+	pa_handle = pa_simple_new(NULL, "alexplayer", PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error);
+	if( pa_handle == NULL ) {
+		fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
+		assert( 0 );
 	}
 
-	update_metadata_web_clients( false, NULL, (void*) &web_handler_data );
+	int max_seconds = 10;
+	size_t max_samples = RATE * max_seconds;
+	size_t buf_size = max_samples * 2;
 
-	res = player_add_metadata_observer( &player, &update_metadata_web_clients, (void*) &web_handler_data );
-	if( res ) {
-		LOG_ERROR("failed to register observer");
-		return 1;
+	float dit_length = 0.1;
+	float dah_length = 0.3;
+	float gap_length = 0.1;
+	float char_space_length = 0.3;
+	float word_space_length = 0.5;
+
+	char_space_length -= gap_length;
+	word_space_length -= gap_length;
+	assert( dit_length > 0.0 );
+	assert( dah_length > dit_length );
+	assert( gap_length > 0.0 );
+	assert( char_space_length > gap_length );
+	assert( word_space_length > char_space_length );
+
+	float tone = 500;
+	float angular_frequency = tone * 2.0 * M_PI;
+
+	//int num_bits = 3;
+	//int encoding = 0b101010;
+
+	int mute = 1;
+	float next_at = 0.0;
+	int data_i = 0;
+	int data[1024];
+	res = set_data( data, 1024, 'b' );
+	assert( res > 0 );
+
+	char *buf = malloc( buf_size );
+	int buf_len = 0;
+	int done = 0;
+	for( int i = 0; i < max_samples && !done; i++ ) {
+		float t = ((float)i) / RATE;
+		float x = sin( t * angular_frequency );
+		int16_t xx = x * 32500;
+		int16_t *p = (int16_t*) (buf + i*2);
+
+		if( t >= next_at ) {
+			if( !mute ) {
+				// just finished a DIT or a DAH, insert a gap
+				mute = 1;
+				next_at = t + gap_length;
+			} else {
+				switch( data[data_i] ) {
+					case DIT:
+						mute = 0;
+						next_at = t + dit_length;
+						break;
+					case DAH:
+						mute = 0;
+						next_at = t + dah_length;
+						break;
+					case CHAR_SPACE:
+						mute = 1;
+						next_at = t + char_space_length;
+						break;
+					case WORD_SPACE:
+						mute = 1;
+						next_at = t + word_space_length;
+						break;
+					case 0:
+						done = 1;
+						buf_len = i*2;
+						break;
+					default:
+						assert(0);
+				}
+				data_i++;
+			}
+			if( done ) {
+				break;
+			}
+		}
+
+		if( mute ) {
+			*p = 0;
+		} else {
+			*p = xx;
+		}
 	}
 
-	//if( playlist_manager.root ) {
-	//	PlaylistItem *x = playlist_manager.root->root;
-	//	player_change_track( &player, x, TRACK_CHANGE_IMMEDIATE );
+	res = pa_simple_write( pa_handle, buf, buf_len, &error );
+	assert( res == 0 );
+
+	res = pa_simple_drain( pa_handle, &error );
+	assert( res == 0 );
+
+	//if( res < 0 ) {
+	//	LOG_ERROR("res=d err=d pa_simple_write failed", res, error);
 	//}
 
-	LOG_DEBUG("running server");
-	res = start_http_server( &web_handler_data );
-	if( res ) {
-		LOG_CRITICAL("failed to start http server");
-		return 2;
-	}
-
-	LOG_DEBUG("done");
 	return 0;
 }
