@@ -313,23 +313,33 @@ void screen_printf(const char *fmt, ...) {
 	refresh();
 }
 
-char get_random( int num ) {
+char get_random( int char_start, int char_end ) {
+	int num = char_end - char_start;
 	int n = random() % num;
+	n += char_start;
 	if( n < 27 ) {
 		return 'a' + n;
 	}
 	n -= 27;
-	return '0' + n;
+	if( n < 10 ) {
+		return '0' + n;
+	}
+	return '\0';
 }
 
 int main(int argc, char *argv[])
 {
-	if( argc != 2 ) {
-		fprintf(stderr, "usage: %s <num chars>\n", argv[0]);
+	if( argc != 3 ) {
+		fprintf(stderr, "usage: %s <char start> <char end>\n", argv[0]);
 		return 1;
 	}
 
-	int num_chars = atoi(argv[1]);
+	int char_start = atoi(argv[1]);
+	int char_end   = atoi(argv[2]);
+	if( char_end <= char_start ) {
+		fprintf(stderr, "<char start> must be less than <char end>\n");
+		return 1;
+	}
 
 	initscr();
 	timeout(-1);
@@ -375,7 +385,7 @@ int main(int argc, char *argv[])
 	float tone = 500;
 
 	while(1) {
-		char randomletter = get_random(num_chars);
+		char randomletter = get_random( char_start, char_end );
 
 		screen_printf("listen...");
 

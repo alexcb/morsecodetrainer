@@ -10,10 +10,10 @@ TESTOBJ=$(TESTSRC:%.c=%.o)
 
 OBJWITHOUTMAIN := $(filter-out src/main.o,$(OBJ))
 
-build: my123 test
+build: morse-code-trainer test
 
-my123: $(OBJ)
-	$(CC) $(CCFLAGS) -o my123 $^ $(LDFLAGS)
+morse-code-trainer: $(OBJ)
+	$(CC) $(CCFLAGS) -o morse-code-trainer $^ $(LDFLAGS)
 
 test: $(OBJWITHOUTMAIN) $(TESTOBJ)
 	$(CC) $(CCFLAGS) -o test $^ $(LDFLAGS)
@@ -22,5 +22,8 @@ test: $(OBJWITHOUTMAIN) $(TESTOBJ)
 %.o: %.c
 	$(CC) -c $(CCFLAGS) $< -o $@
 
+install: morse-code-trainer
+	cp morse-code-trainer ~/bin/.
+
 clean:
-	rm -f my123 test $(OBJ) $(TESTOBJ)
+	rm -f morse-code-trainer test $(OBJ) $(TESTOBJ)
