@@ -20,9 +20,11 @@
 #include <stdio.h>
 
 #include <curses.h>
+#include <picoapi.h>
 
 
-#define RATE 44100
+//#define RATE 44100
+#define RATE 16000
 
 #define DIT 1
 #define DAH 2
@@ -327,6 +329,37 @@ char get_random( int char_start, int char_end ) {
 	return '\0';
 }
 
+size_t synth_text( pico_Engine *engine, const char *s, char *buf, int max_samples )
+{
+	pico_Status status;
+	pico_Int16 textLeft = strlen(s) + 1;
+	pico_Int16 textRead = 0;
+	pico_Int16 sum = 0;
+
+	while(textLeft != sum){
+		pico_putTextUtf8( *engine, (const pico_Char*)s, textLeft, &textRead );
+		sum += textRead;
+	}
+
+
+	size_t total_bytes = 0;
+	pico_Int16 n;
+	pico_Int16 type;
+	while( 1 ) {
+		status = pico_getData( *engine, (void*)buf, max_samples/2, &n, &type);
+		buf += n;
+		total_bytes += n;
+
+		if( status == PICO_STEP_IDLE ) {
+			break;
+		}
+	}
+	return total_bytes;
+}
+
+#define MEM_SIZE 2500000
+#define MAX_BUFF_SIZE 10240
+
 int main(int argc, char *argv[])
 {
 	if( argc != 3 ) {
@@ -340,6 +373,30 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "<char start> must be less than <char end>\n");
 		return 1;
 	}
+
+	pico_System sys;
+	pico_Engine engine;
+	char ta_resource_name[1024];
+	char sg_resource_name[1024];
+	
+
+	pico_Resource ta_resource;
+	pico_Resource sg_resource;
+
+	const char *voice_name = "English";
+	const char *ta_path = "/usr/share/pico/lang/en-US_ta.bin";
+	const char *sg_path = "/usr/share/pico/lang/en-US_lh0_sg.bin";
+
+	void *mem_space = (void*)malloc(MEM_SIZE);
+	assert( pico_initialize( mem_space, MEM_SIZE, &sys ) == PICO_OK );
+	assert( pico_loadResource( sys, (const pico_Char *) ta_path, &ta_resource) == PICO_OK );
+	assert( pico_loadResource( sys, (const pico_Char *) sg_path, &sg_resource) == PICO_OK );
+	assert( pico_createVoiceDefinition( sys, (const pico_Char*) voice_name ) == PICO_OK );
+	assert( pico_getResourceName( sys, ta_resource, (char *)ta_resource_name ) == PICO_OK );
+	assert( pico_getResourceName( sys, sg_resource, (char *)sg_resource_name ) == PICO_OK );
+	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &ta_resource_name) == PICO_OK );
+	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &sg_resource_name) == PICO_OK );
+	assert( pico_newEngine( sys, (const pico_Char*) voice_name, &engine) == PICO_OK );
 
 	initscr();
 	timeout(-1);
@@ -382,7 +439,9 @@ int main(int argc, char *argv[])
 	assert( char_space_length > gap_length );
 	assert( word_space_length > char_space_length );
 
+	size_t buf_len;
 	float tone = 500;
+	char *buf = malloc( buf_size );
 
 	while(1) {
 		char randomletter = get_random( char_start, char_end );
@@ -394,38 +453,57 @@ int main(int argc, char *argv[])
 		assert( res > 0 );
 		data[res] = 0;
 
-		char *buf = malloc( buf_size );
-
-		size_t buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples );
+		// more code
+		buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples );
 		assert( buf_len > 0 );
 
 		res = pa_simple_write( pa_handle, buf, buf_len, &error );
 		assert( res == 0 );
 
+		// drain
 		res = pa_simple_drain( pa_handle, &error );
 		assert( res == 0 );
 
 
-		screen_printf("what was that?");
-		int guess = getch();
+		usleep( 1000000 );
 
-		if( guess == randomletter ) {
-			screen_printf("correct!");
-			sleep(2);
-			continue;
-		}
-		screen_printf("wrong! %c", randomletter);
-		sleep(2);
 
-		for(int i = 0; i < 3; i++ ) {
-			res = pa_simple_write( pa_handle, buf, buf_len, &error );
-			assert( res == 0 );
+		// english
+		char s[1024];
+		sprintf(s, "%c ", randomletter);
+		buf_len = synth_text( &engine, s, buf, max_samples );
+		assert( buf_len > 0 );
 
-			res = pa_simple_drain( pa_handle, &error );
-			assert( res == 0 );
+		res = pa_simple_write( pa_handle, buf, buf_len, &error );
+		assert( res == 0 );
 
-			sleep(1);
-		}
+		// drain
+		res = pa_simple_drain( pa_handle, &error );
+		assert( res == 0 );
+
+		usleep( 5000000 );
+
+
+		//screen_printf("what was that?");
+		//int guess = getch();
+
+		//if( guess == randomletter ) {
+		//	screen_printf("correct!");
+		//	sleep(2);
+		//	continue;
+		//}
+		//screen_printf("wrong! %c", randomletter);
+		//sleep(2);
+
+		//for(int i = 0; i < 3; i++ ) {
+		//	res = pa_simple_write( pa_handle, buf, buf_len, &error );
+		//	assert( res == 0 );
+
+		//	res = pa_simple_drain( pa_handle, &error );
+		//	assert( res == 0 );
+
+		//	sleep(1);
+		//}
 
 	}
 	endwin();
