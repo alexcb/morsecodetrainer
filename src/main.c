@@ -21,6 +21,7 @@
 
 #include <curses.h>
 #include <picoapi.h>
+#include "wav_loader.h"
 
 
 //#define RATE 44100
@@ -362,15 +363,22 @@ size_t synth_text( pico_Engine *engine, const char *s, char *buf, int max_sample
 
 int main(int argc, char *argv[])
 {
-	if( argc != 3 ) {
+	int char_start;
+	int char_end;
+
+	if( argc == 1 ) {
+		char_start = 0;
+		char_end = 37;
+	} else if( argc == 3  ) {
+		char_start = atoi(argv[1]);
+		char_end = atoi(argv[2]);
+	} else {
 		fprintf(stderr, "usage: %s <char start> <char end>\n", argv[0]);
 		return 1;
 	}
 
-	int char_start = atoi(argv[1]);
-	int char_end   = atoi(argv[2]);
-	if( char_end <= char_start ) {
-		fprintf(stderr, "<char start> must be less than <char end>\n");
+	if( char_end <= char_start || char_end < 0 || char_end > 37) {
+		fprintf(stderr, "<char start> must be less than <char end> (from 0 to 37)\n");
 		return 1;
 	}
 
@@ -379,7 +387,6 @@ int main(int argc, char *argv[])
 	char ta_resource_name[1024];
 	char sg_resource_name[1024];
 	
-
 	pico_Resource ta_resource;
 	pico_Resource sg_resource;
 
@@ -397,6 +404,8 @@ int main(int argc, char *argv[])
 	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &ta_resource_name) == PICO_OK );
 	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &sg_resource_name) == PICO_OK );
 	assert( pico_newEngine( sys, (const pico_Char*) voice_name, &engine) == PICO_OK );
+
+	int use_wav = 1;
 
 	initscr();
 	timeout(-1);
@@ -453,33 +462,41 @@ int main(int argc, char *argv[])
 		assert( res > 0 );
 		data[res] = 0;
 
-		// more code
+		// morse code
 		buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples );
 		assert( buf_len > 0 );
 
-		res = pa_simple_write( pa_handle, buf, buf_len, &error );
-		assert( res == 0 );
+		if( buf_len > 0 ) {
+			res = pa_simple_write( pa_handle, buf, buf_len, &error );
+			assert( res == 0 );
 
-		// drain
-		res = pa_simple_drain( pa_handle, &error );
-		assert( res == 0 );
-
+			// drain
+			res = pa_simple_drain( pa_handle, &error );
+			assert( res == 0 );
+		}
 
 		usleep( 1000000 );
 
+		// wav loader (english)
+		if( use_wav ) {
+			char path[1024];
+			sprintf(path, "alphabet/tim-kahn-phonetic-16bit-mono/%c.wav", randomletter);
+			buf_len = load_wav( path, buf, buf_size );
+		} else {
+			char s[1024];
+			sprintf(s, "%c ", randomletter);
+			buf_len = synth_text( &engine, s, buf, max_samples );
+			assert( buf_len > 0 );
+		}
 
-		// english
-		char s[1024];
-		sprintf(s, "%c ", randomletter);
-		buf_len = synth_text( &engine, s, buf, max_samples );
-		assert( buf_len > 0 );
+		if( buf_len > 0 ) {
+			res = pa_simple_write( pa_handle, buf, buf_len, &error );
+			assert( res == 0 );
 
-		res = pa_simple_write( pa_handle, buf, buf_len, &error );
-		assert( res == 0 );
-
-		// drain
-		res = pa_simple_drain( pa_handle, &error );
-		assert( res == 0 );
+			// drain
+			res = pa_simple_drain( pa_handle, &error );
+			assert( res == 0 );
+		}
 
 		usleep( 5000000 );
 
