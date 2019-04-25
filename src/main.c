@@ -20,8 +20,11 @@
 #include <stdio.h>
 
 #include <curses.h>
-#include <picoapi.h>
 #include "wav_loader.h"
+
+#ifdef USE_PICO
+#include <picoapi.h>
+#endif //USE_PICO
 
 
 //#define RATE 44100
@@ -330,6 +333,7 @@ char get_random( int char_start, int char_end ) {
 	return '\0';
 }
 
+#ifdef USE_PICO
 size_t synth_text( pico_Engine *engine, const char *s, char *buf, int max_samples )
 {
 	pico_Status status;
@@ -357,6 +361,7 @@ size_t synth_text( pico_Engine *engine, const char *s, char *buf, int max_sample
 	}
 	return total_bytes;
 }
+#endif // USE_PICO
 
 #define MEM_SIZE 2500000
 #define MAX_BUFF_SIZE 10240
@@ -382,6 +387,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+#ifdef USE_PICO
 	pico_System sys;
 	pico_Engine engine;
 	char ta_resource_name[1024];
@@ -404,8 +410,7 @@ int main(int argc, char *argv[])
 	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &ta_resource_name) == PICO_OK );
 	assert( pico_addResourceToVoiceDefinition( sys, (const pico_Char*) voice_name, (const pico_Char *) &sg_resource_name) == PICO_OK );
 	assert( pico_newEngine( sys, (const pico_Char*) voice_name, &engine) == PICO_OK );
-
-	int use_wav = 1;
+#endif // USE_PICO
 
 	initscr();
 	timeout(-1);
@@ -478,16 +483,16 @@ int main(int argc, char *argv[])
 		usleep( 1000000 );
 
 		// wav loader (english)
-		if( use_wav ) {
-			char path[1024];
-			sprintf(path, "alphabet/tim-kahn-phonetic-16bit-mono/%c.wav", randomletter);
-			buf_len = load_wav( path, buf, buf_size );
-		} else {
-			char s[1024];
-			sprintf(s, "%c ", randomletter);
-			buf_len = synth_text( &engine, s, buf, max_samples );
-			assert( buf_len > 0 );
-		}
+#ifdef USE_PICO
+		char s[1024];
+		sprintf(s, "%c ", randomletter);
+		buf_len = synth_text( &engine, s, buf, max_samples );
+		assert( buf_len > 0 );
+#else
+		char path[1024];
+		sprintf(path, "alphabet/tim-kahn-phonetic-16bit-mono/%c.wav", randomletter);
+		buf_len = load_wav( path, buf, buf_size );
+#endif // USE_PICO
 
 		if( buf_len > 0 ) {
 			res = pa_simple_write( pa_handle, buf, buf_len, &error );

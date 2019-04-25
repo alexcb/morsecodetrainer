@@ -1,6 +1,9 @@
 CC=gcc
 CCFLAGS=-O3 -std=gnu11 -Wall -Werror -I./src
-LDFLAGS=-lmpg123 -lmicrohttpd -lpthread -lm -lpulse -lpulse-simple -lcurses -lttspico
+LDFLAGS=-lmpg123 -lmicrohttpd -lpthread -lm -lpulse -lpulse-simple -lcurses
+
+# ifdef USE_PICO
+# -lttspico
 
 SRC=$(wildcard src/**/*.c src/*.c)
 OBJ=$(SRC:%.c=%.o)
