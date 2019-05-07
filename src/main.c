@@ -35,6 +35,8 @@
 #define CHAR_SPACE 4
 #define WORD_SPACE 5
 
+#define MORSE_VOL 0.07f
+
 int set_data( int *data, int n, const char c )
 {
 	switch( c ) {
@@ -249,7 +251,7 @@ int set_data( int *data, int n, const char c )
 
 size_t synth(
 		int tone, float dit_length, float dah_length, float gap_length, float char_space_length, float word_space_length,
-		int *data, char *buf, int max_samples
+		int *data, char *buf, int max_samples, float volume
 		)
 {
 	float angular_frequency = tone * 2.0 * M_PI;
@@ -468,7 +470,7 @@ int main(int argc, char *argv[])
 		data[res] = 0;
 
 		// morse code
-		buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples );
+		buf_len = synth( tone, dit_length, dah_length, gap_length, char_space_length, word_space_length, data, buf, max_samples, MORSE_VOL );
 		assert( buf_len > 0 );
 
 		if( buf_len > 0 ) {
